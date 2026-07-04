@@ -20,6 +20,21 @@ export class CreateBidDto {
 export class FreelanceService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getCategories() {
+    return this.prisma.freelanceCategory.findMany({
+      orderBy: { label: 'asc' },
+      include: {
+        _count: {
+          select: {
+            jobs: {
+              where: { status: 'OPEN' },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async createJob(clientId: string, dto: CreateFreelanceJobDto) {
     return this.prisma.freelanceJob.create({
       data: { ...dto, clientId, status: 'OPEN' },

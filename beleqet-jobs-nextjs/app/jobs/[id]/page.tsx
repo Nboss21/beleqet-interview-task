@@ -1,17 +1,68 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Clock, Building2, ArrowLeft } from "lucide-react";
-import { jobs } from "@/lib/mockData";
+import { MapPin, Clock, Building2, ArrowLeft, Tag } from "lucide-react";
+import { getJobById, getJobs, type ApiJob } from "@/lib/api";
+import ApplySection from "@/components/ApplySection";
 
-export function generateStaticParams() {
-  return jobs.map((job) => ({ id: job.id }));
+export const dynamic = "force-dynamic";
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 }
 
-export default function JobDetailPage({ params }: { params: { id: string } }) {
-  const job = jobs.find((j) => j.id === params.id);
-  if (!job) notFound();
+function getCompanyName(job: Awaited<ReturnType<typeof getJobById>>): string {
+  if ((job as any).company?.name) return (job as any).company.name;
+  if (job.companyName) return job.companyName;
+  if (job.employer?.company?.name) return job.employer.company.name;
+  if (job.employer) return `${job.employer.firstName} ${job.employer.lastName}`;
+  return "Company";
+}
 
-  const related = jobs.filter((j) => j.category === job.category && j.id !== job.id).slice(0, 3);
+const typeLabels: Record<string, string> = {
+  FULL_TIME: "Full Time",
+  PART_TIME: "Part Time",
+  REMOTE: "Remote",
+  HYBRID: "Hybrid",
+  CONTRACT: "Contract",
+};
+
+export default async function JobDetailPage({ params }: { params: { id: string } }) {
+  let job;
+  try {
+    job = await getJobById(params.id);
+  } catch (err: unknown) {
+    const status = (err as { statusCode?: number })?.statusCode;
+    if (status === 404) notFound();
+    // For other errors, show error state below
+    return (
+      <div className="container-page py-20 text-center">
+        <p className="text-ink font-semibold">Unable to load job details</p>
+        <p className="text-sm text-muted mt-2">The server may be temporarily unavailable.</p>
+        <Link href="/jobs" className="inline-block mt-4 text-brandGreen text-sm hover:underline">
+          ← Back to all jobs
+        </Link>
+      </div>
+    );
+  }
+
+  const company = getCompanyName(job);
+  const typeLabel = typeLabels[job.type] ?? job.type;
+
+  // Fetch related jobs (same category)
+  let related: ApiJob[] = [];
+  try {
+    const relatedData = await getJobs({
+      category: job.category?.slug ?? undefined,
+      limit: 4,
+    });
+    related = relatedData.items.filter((j) => j.id !== job.id).slice(0, 3);
+  } catch {
+    // related jobs are non-critical
+  }
 
   return (
     <div className="container-page py-10">
@@ -20,6 +71,7 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
       </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8">
+        {/* Main content */}
         <div>
           <div className="rounded-2xl border border-border bg-white p-7">
             <div className="flex items-start gap-4">
@@ -28,48 +80,78 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
               </span>
               <div>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-ink leading-snug">{job.title}</h1>
-                <p className="text-muted mt-1">{job.company}</p>
+                <p className="text-muted mt-1">{company}</p>
                 <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-muted">
                   <span className="flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5" /> {job.location}
                   </span>
                   <span className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" /> {job.postedAgo}
+                    <Clock className="h-3.5 w-3.5" /> Posted {formatDate(job.createdAt)}
                   </span>
                   <span className="rounded-full bg-brandGreen/10 text-brandGreen font-semibold px-2.5 py-1">
-                    {job.type}
+                    {typeLabel}
                   </span>
+                  {job.featured && (
+                    <span className="rounded-full bg-orangeAccent/10 text-orangeAccent font-semibold px-2.5 py-1">
+                      Featured
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
+            {/* Salary */}
+            {(job.salaryMin || job.salaryMax) && (
+              <div className="mt-4 flex items-center gap-1 text-sm font-semibold text-brandGreen">
+                <span>
+                  {job.salaryMin && job.salaryMax
+                    ? `ETB ${job.salaryMin.toLocaleString()} – ${job.salaryMax.toLocaleString()}`
+                    : job.salaryMin
+                    ? `ETB ${job.salaryMin.toLocaleString()}+`
+                    : `Up to ETB ${job.salaryMax!.toLocaleString()}`}
+                </span>
+              </div>
+            )}
+
             <div className="mt-7 pt-7 border-t border-border">
               <h2 className="text-sm font-semibold text-ink mb-3">Job Description</h2>
-              <p className="text-sm text-muted leading-relaxed">{job.description}</p>
+              <p className="text-sm text-muted leading-relaxed whitespace-pre-line">{job.description}</p>
             </div>
 
-            {job.tags && (
+            {job.requirements && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <h2 className="text-sm font-semibold text-ink mb-3">Requirements</h2>
+                <p className="text-sm text-muted leading-relaxed whitespace-pre-line">{job.requirements}</p>
+              </div>
+            )}
+
+            {job.tags && job.tags.length > 0 && (
               <div className="mt-6 flex flex-wrap gap-2">
                 {job.tags.map((tag) => (
-                  <span key={tag} className="text-xs font-medium text-muted bg-pageBg border border-border rounded-full px-3 py-1">
-                    {tag}
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 text-xs font-medium text-muted bg-pageBg border border-border rounded-full px-3 py-1"
+                  >
+                    <Tag className="h-3 w-3" /> {tag}
                   </span>
                 ))}
               </div>
             )}
+
+            {job.deadline && (
+              <p className="mt-4 text-xs text-muted">
+                Application deadline: <span className="font-semibold text-ink">{formatDate(job.deadline)}</span>
+              </p>
+            )}
           </div>
         </div>
 
+        {/* Sidebar */}
         <aside className="space-y-6">
-          <div className="rounded-2xl border border-border bg-white p-6">
-            <button className="w-full rounded-full bg-brandGreen text-white text-sm font-semibold py-3 hover:bg-darkGreen transition-colors">
-              Apply Now
-            </button>
-            <button className="w-full rounded-full border border-border text-ink text-sm font-semibold py-3 mt-2 hover:bg-pageBg transition-colors">
-              Save Job
-            </button>
-          </div>
+          {/* Apply section — client component */}
+          <ApplySection job={job} />
 
+          {/* Related jobs */}
           {related.length > 0 && (
             <div className="rounded-2xl border border-border bg-white p-6">
               <h3 className="text-sm font-semibold text-ink mb-4">Similar Jobs</h3>
@@ -81,7 +163,9 @@ export default function JobDetailPage({ params }: { params: { id: string } }) {
                     className="block rounded-lg hover:bg-pageBg p-2 -mx-2 transition-colors"
                   >
                     <p className="text-sm font-semibold text-ink line-clamp-1">{r.title}</p>
-                    <p className="text-xs text-muted mt-0.5">{r.company} · {r.location}</p>
+                    <p className="text-xs text-muted mt-0.5">
+                      {r.companyName ?? "Company"} · {r.location}
+                    </p>
                   </Link>
                 ))}
               </div>

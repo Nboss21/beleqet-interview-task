@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Providers from "./providers";
 
 // Using Inter via next/font/google requires network access to Google Fonts at
 // build time. If your deployment environment can reach fonts.googleapis.com,
@@ -24,9 +25,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased">
-        <Header />
-        <main>{children}</main>
-        <Footer />
+        <Providers>
+          <Header />
+          <main>{children}</main>
+          <Footer />
+        </Providers>
       </body>
     </html>
   );

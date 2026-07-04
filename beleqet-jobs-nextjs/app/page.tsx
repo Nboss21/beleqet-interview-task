@@ -5,6 +5,8 @@ import FeaturedJobs from "@/components/FeaturedJobs";
 import WhyChoose from "@/components/WhyChoose";
 import CTABanner from "@/components/CTABanner";
 
+export const dynamic = "force-dynamic";
+
 export default function HomePage() {
   return (
     <>

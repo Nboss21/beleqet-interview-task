@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Search, MapPin, ShieldCheck, BellRing, Send } from "lucide-react";
-import { popularSearches } from "@/lib/mockData";
+const popularSearches = ["Developer", "Marketing", "Designer", "Accounting", "Sales", "Remote"];
 
 export default function Hero() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function Hero() {
     e.preventDefault();
     const params = new URLSearchParams();
     if (query) params.set("q", query);
-    if (location) params.set("loc", location);
+    if (location) params.set("location", location);
     router.push(`/jobs?${params.toString()}`);
   }
 

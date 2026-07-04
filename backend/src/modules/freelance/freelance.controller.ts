@@ -13,6 +13,9 @@ export class FreelanceController {
   @Get('jobs')
   findJobs(@Query() q: { q?: string; category?: string; page?: number; limit?: number }) { return this.svc.findJobs(q); }
 
+  @Get('categories')
+  findCategories() { return this.svc.getCategories(); }
+
   @Get('jobs/:id')
   findJob(@Param('id') id: string) { return this.svc.findJobById(id); }
 

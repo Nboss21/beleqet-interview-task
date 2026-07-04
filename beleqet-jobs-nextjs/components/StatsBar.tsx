@@ -1,5 +1,5 @@
 import { Briefcase, Building2, Users, Smile, type LucideIcon } from "lucide-react";
-import { stats } from "@/lib/mockData";
+import { getJobs } from "@/lib/api";
 
 const iconMap: Record<string, LucideIcon> = {
   briefcase: Briefcase,
@@ -8,7 +8,28 @@ const iconMap: Record<string, LucideIcon> = {
   smile: Smile,
 };
 
-export default function StatsBar() {
+// Static label/icon config — counts come from the API
+const statConfig = [
+  { label: "Active Jobs", icon: "briefcase", staticValue: "10,000+" },
+  { label: "Hiring Companies", icon: "building-2", staticValue: "5,000+" },
+  { label: "Registered Job Seekers", icon: "users", staticValue: "50,000+" },
+  { label: "Satisfaction Rate", icon: "smile", staticValue: "98%" },
+];
+
+export default async function StatsBar() {
+  let totalJobs = 0;
+  try {
+    const data = await getJobs({ limit: 1 });
+    totalJobs = data.total;
+  } catch {
+    // Backend unavailable — silently fall back to static values
+  }
+
+  const stats = statConfig.map((s) => ({
+    ...s,
+    value: s.label === "Active Jobs" && totalJobs > 0 ? `${totalJobs.toLocaleString()}` : s.staticValue,
+  }));
+
   return (
     <div className="container-page -mt-7 relative z-10">
       <div className="rounded-2xl bg-brandGreen text-white grid grid-cols-2 sm:grid-cols-4 divide-x divide-white/15 shadow-cardHover">
