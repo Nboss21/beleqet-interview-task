@@ -4,7 +4,7 @@ import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { createJob, getJobCategories, ApiError, type ApiJobCategory, type JobType, getCompany, createCompany } from "@/lib/api";
-import { Loader2, AlertCircle, Lock } from "lucide-react";
+import { Loader2, AlertCircle, Lock, Building } from "lucide-react";
 import Link from "next/link";
 
 const jobTypeOptions: { value: JobType; label: string }[] = [
@@ -21,6 +21,10 @@ export default function PostJobPage() {
 
   const [categories, setCategories] = useState<ApiJobCategory[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+
+  // Company profile validation
+  const [company, setCompany] = useState<any | null>(null);
+  const [companyLoading, setCompanyLoading] = useState(true);
 
   // Form fields
   const [title, setTitle] = useState("");
@@ -45,7 +49,18 @@ export default function PostJobPage() {
       })
       .catch(() => {})
       .finally(() => setCategoriesLoading(false));
-  }, []);
+
+    if (user && (user.role === "EMPLOYER" || user.role === "ADMIN")) {
+      getCompany()
+        .then((comp) => {
+          setCompany(comp);
+        })
+        .catch(() => {})
+        .finally(() => setCompanyLoading(false));
+    } else {
+      setCompanyLoading(false);
+    }
+  }, [user]);
 
   if (authLoading) {
     return (
@@ -93,31 +108,41 @@ export default function PostJobPage() {
     );
   }
 
+  if (companyLoading) {
+    return (
+      <div className="container-page py-24 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-brandGreen animate-spin" />
+      </div>
+    );
+  }
+
+  if (!company) {
+    return (
+      <div className="container-page py-24 max-w-md text-center">
+        <Building className="h-12 w-12 text-brandGreen/80 mx-auto mb-4 animate-bounce" />
+        <h1 className="text-2xl font-black text-ink">Company profile required</h1>
+        <p className="text-muted text-sm mt-3 leading-relaxed">
+          Before you can publish job listings, you must set up your company profile details (name, website, industry, etc.).
+        </p>
+        <Link
+          href="/profile?tab=company"
+          className="inline-block mt-6 rounded-full bg-brandGreen px-6 py-3 text-sm font-bold text-white hover:bg-darkGreen transition-colors shadow-lg shadow-brandGreen/20"
+        >
+          Complete Company Profile
+        </Link>
+        <Link href="/dashboard" className="block mt-4 text-xs text-muted hover:underline font-semibold">
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
 
     try {
-      // Check if user has a company profile, create one on-the-fly if missing
-      let company = null;
-      try {
-        company = await getCompany();
-      } catch (err) {
-        // If retrieving company fails, we will try to create one
-      }
-
-      if (!company) {
-        try {
-          company = await createCompany({
-            name: user ? `${user.firstName}'s Company` : "Employer Company",
-            description: "Default company profile created automatically during job posting.",
-          });
-        } catch (err) {
-          throw new Error("Could not create a company profile automatically. Please contact support.");
-        }
-      }
-
       const tagArray = tags
         .split(",")
         .map((t) => t.trim())

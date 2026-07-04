@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, Suspense } from "react";
 import { useAuth } from "@/lib/auth";
-import { getUserProfile, updateUserProfile, ApiError, type UserProfile } from "@/lib/api";
+import { getUserProfile, updateUserProfile, getCompany, createCompany, ApiError, type UserProfile } from "@/lib/api";
+import { useSearchParams } from "next/navigation";
 import { 
   Loader2, 
   AlertCircle, 
@@ -19,12 +20,15 @@ import {
   Briefcase, 
   Plus, 
   X,
-  Sparkles
+  Sparkles,
+  Building
 } from "lucide-react";
 import Link from "next/link";
 
-export default function ProfilePage() {
+function ProfilePageContent() {
   const { user: authUser, isLoading: authLoading } = useAuth();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +51,23 @@ export default function ProfilePage() {
   const [skills, setSkills] = useState<string[]>([]);
   const [newSkill, setNewSkill] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"personal" | "professional" | "skills">("personal");
+  // Company Form states
+  const [compName, setCompName] = useState("");
+  const [compDescription, setCompDescription] = useState("");
+  const [compLogoUrl, setCompLogoUrl] = useState("");
+  const [compWebsite, setCompWebsite] = useState("");
+  const [compIndustry, setCompIndustry] = useState("");
+  const [compSize, setCompSize] = useState("");
+  const [compLocation, setCompLocation] = useState("");
+  const [hasCompany, setHasCompany] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<"personal" | "professional" | "skills" | "company">("personal");
+
+  useEffect(() => {
+    if (tabParam === "company" || tabParam === "personal" || tabParam === "professional" || tabParam === "skills") {
+      setActiveTab(tabParam as any);
+    }
+  }, [tabParam]);
 
   useEffect(() => {
     if (authUser) {
@@ -75,6 +95,24 @@ export default function ProfilePage() {
       setGithubUrl(data.githubUrl || "");
       setLinkedinUrl(data.linkedinUrl || "");
       setSkills(data.skills || []);
+
+      if (data.role === "EMPLOYER" || data.role === "ADMIN") {
+        try {
+          const compData = await getCompany();
+          if (compData) {
+            setHasCompany(true);
+            setCompName(compData.name || "");
+            setCompDescription(compData.description || "");
+            setCompLogoUrl(compData.logoUrl || "");
+            setCompWebsite(compData.website || "");
+            setCompIndustry(compData.industry || "");
+            setCompSize(compData.size || "");
+            setCompLocation(compData.location || "");
+          }
+        } catch (err) {
+          // ignore company fetch failure
+        }
+      }
     } catch (err) {
       setError("Failed to fetch profile details.");
     } finally {
@@ -89,21 +127,41 @@ export default function ProfilePage() {
     setSaving(true);
 
     try {
-      const updated = await updateUserProfile({
-        firstName,
-        lastName,
-        phone: phone || null,
-        telegramId: telegramId || null,
-        headline: headline || null,
-        bio: bio || null,
-        location: location || null,
-        defaultResumeUrl: defaultResumeUrl || null,
-        portfolioUrl: portfolioUrl || null,
-        githubUrl: githubUrl || null,
-        linkedinUrl: linkedinUrl || null,
-        skills,
-      });
-      setProfile(updated);
+      if (activeTab === "company") {
+        const updatedComp = await createCompany({
+          name: compName,
+          description: compDescription || undefined,
+          logoUrl: compLogoUrl || undefined,
+          website: compWebsite || undefined,
+          industry: compIndustry || undefined,
+          size: compSize || undefined,
+          location: compLocation || undefined,
+        });
+        setHasCompany(true);
+        setCompName(updatedComp.name || "");
+        setCompDescription(updatedComp.description || "");
+        setCompLogoUrl(updatedComp.logoUrl || "");
+        setCompWebsite(updatedComp.website || "");
+        setCompIndustry(updatedComp.industry || "");
+        setCompSize(updatedComp.size || "");
+        setCompLocation(updatedComp.location || "");
+      } else {
+        const updated = await updateUserProfile({
+          firstName,
+          lastName,
+          phone: phone || null,
+          telegramId: telegramId || null,
+          headline: headline || null,
+          bio: bio || null,
+          location: location || null,
+          defaultResumeUrl: defaultResumeUrl || null,
+          portfolioUrl: portfolioUrl || null,
+          githubUrl: githubUrl || null,
+          linkedinUrl: linkedinUrl || null,
+          skills,
+        });
+        setProfile(updated);
+      }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -171,6 +229,7 @@ export default function ProfilePage() {
 
       <div className="flex gap-4 border-b border-border mb-8">
         <button
+          type="button"
           onClick={() => setActiveTab("personal")}
           className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
             activeTab === "personal" ? "border-brandGreen text-brandGreen" : "border-transparent text-muted hover:text-ink"
@@ -178,7 +237,19 @@ export default function ProfilePage() {
         >
           Personal Details
         </button>
+        {(profile?.role === "EMPLOYER" || profile?.role === "ADMIN") && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("company")}
+            className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+              activeTab === "company" ? "border-brandGreen text-brandGreen" : "border-transparent text-muted hover:text-ink"
+            }`}
+          >
+            Company Profile
+          </button>
+        )}
         <button
+          type="button"
           onClick={() => setActiveTab("professional")}
           className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
             activeTab === "professional" ? "border-brandGreen text-brandGreen" : "border-transparent text-muted hover:text-ink"
@@ -186,14 +257,17 @@ export default function ProfilePage() {
         >
           Bio & Links
         </button>
-        <button
-          onClick={() => setActiveTab("skills")}
-          className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
-            activeTab === "skills" ? "border-brandGreen text-brandGreen" : "border-transparent text-muted hover:text-ink"
-          }`}
-        >
-          Skills ({skills.length})
-        </button>
+        {profile?.role !== "EMPLOYER" && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("skills")}
+            className={`pb-3 text-sm font-semibold border-b-2 transition-all ${
+              activeTab === "skills" ? "border-brandGreen text-brandGreen" : "border-transparent text-muted hover:text-ink"
+            }`}
+          >
+            Skills ({skills.length})
+          </button>
+        )}
       </div>
 
       {error && (
@@ -453,6 +527,100 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* TAB 4: COMPANY PROFILE */}
+        {activeTab === "company" && (
+          <div className="space-y-5">
+            <h3 className="text-sm font-bold text-ink uppercase tracking-wider border-b border-border/50 pb-2 flex items-center gap-2">
+              <Building className="h-4 w-4 text-brandGreen" /> Company Profile Details
+            </h3>
+            
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1.5">Company Name *</label>
+              <input
+                type="text"
+                required
+                value={compName}
+                onChange={(e) => setCompName(e.target.value)}
+                placeholder="e.g. Tech Solutions PLC"
+                className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Industry / Category</label>
+                <input
+                  type="text"
+                  value={compIndustry}
+                  onChange={(e) => setCompIndustry(e.target.value)}
+                  placeholder="e.g. Software Development"
+                  className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Company Size</label>
+                <select
+                  value={compSize}
+                  onChange={(e) => setCompSize(e.target.value)}
+                  className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors bg-white"
+                >
+                  <option value="">Select size...</option>
+                  <option value="1-10">1-10 employees</option>
+                  <option value="11-50">11-50 employees</option>
+                  <option value="51-200">51-200 employees</option>
+                  <option value="201-500">201-500 employees</option>
+                  <option value="500+">500+ employees</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Location</label>
+                <input
+                  type="text"
+                  value={compLocation}
+                  onChange={(e) => setCompLocation(e.target.value)}
+                  placeholder="e.g. Addis Ababa, Ethiopia"
+                  className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-ink mb-1.5">Website</label>
+                <input
+                  type="url"
+                  value={compWebsite}
+                  onChange={(e) => setCompWebsite(e.target.value)}
+                  placeholder="e.g. https://company.com"
+                  className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1.5">Logo URL</label>
+              <input
+                type="url"
+                value={compLogoUrl}
+                onChange={(e) => setCompLogoUrl(e.target.value)}
+                placeholder="e.g. https://company.com/logo.png"
+                className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-ink mb-1.5">About the Company</label>
+              <textarea
+                rows={5}
+                value={compDescription}
+                onChange={(e) => setCompDescription(e.target.value)}
+                placeholder="Describe your company's mission, values, and work culture..."
+                className="w-full rounded-lg border border-border px-3 py-2.5 text-sm outline-none focus:border-brandGreen transition-colors resize-none leading-relaxed"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="pt-4 border-t border-border flex items-center justify-between">
           <span className="text-[11px] text-muted leading-normal">
             * Indicates required fields. Profile changes take effect immediately on live job listings.
@@ -469,5 +637,17 @@ export default function ProfilePage() {
 
       </form>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={
+      <div className="container-page py-24 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 text-brandGreen animate-spin" />
+      </div>
+    }>
+      <ProfilePageContent />
+    </Suspense>
   );
 }

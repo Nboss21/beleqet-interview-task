@@ -36,7 +36,11 @@ export class UsersService {
   }
 
   async createCompany(userId: string, dto: CreateCompanyDto) {
-    return this.prisma.company.create({ data: { ...dto, userId } });
+    return this.prisma.company.upsert({
+      where: { userId },
+      update: dto,
+      create: { ...dto, userId },
+    });
   }
 
   async getCompany(userId: string) {

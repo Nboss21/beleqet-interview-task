@@ -283,19 +283,34 @@ export async function getMyApplications(): Promise<ApiApplication[]> {
 
 // ─── Company ──────────────────────────────────────────────────────────────────
 
+export interface ApiCompany {
+  id: string;
+  name: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  size?: string | null;
+  location?: string | null;
+  verified?: boolean;
+}
+
 export interface CreateCompanyPayload {
   name: string;
   description?: string;
   logoUrl?: string;
   website?: string;
+  industry?: string;
+  size?: string;
+  location?: string;
 }
 
-export async function getCompany(): Promise<{ id: string; name: string } | null> {
-  return apiFetch<{ id: string; name: string } | null>("/users/company");
+export async function getCompany(): Promise<ApiCompany | null> {
+  return apiFetch<ApiCompany | null>("/users/company");
 }
 
-export async function createCompany(payload: CreateCompanyPayload): Promise<{ id: string; name: string }> {
-  return apiFetch<{ id: string; name: string }>("/users/company", {
+export async function createCompany(payload: CreateCompanyPayload): Promise<ApiCompany> {
+  return apiFetch<ApiCompany>("/users/company", {
     method: "POST",
     body: JSON.stringify(payload),
   });
